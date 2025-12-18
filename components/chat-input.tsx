@@ -1,6 +1,7 @@
 "use client"
 
 import {
+    Code,
     Download,
     History,
     Image as ImageIcon,
@@ -129,6 +130,7 @@ interface ChatInputProps {
     onToggleHistory?: (show: boolean) => void
     sessionId?: string
     error?: Error | null
+    onCodeUploadClick?: () => void
 }
 
 export function ChatInput({
@@ -144,6 +146,7 @@ export function ChatInput({
     onToggleHistory = () => {},
     sessionId,
     error = null,
+    onCodeUploadClick,
 }: ChatInputProps) {
     const { diagramHistory, saveDiagramToFile } = useDiagram()
     const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -381,6 +384,20 @@ export function ChatInput({
                                 .toISOString()
                                 .slice(0, 10)}`}
                         />
+
+                        {onCodeUploadClick && (
+                            <ButtonWithTooltip
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={onCodeUploadClick}
+                                disabled={isDisabled}
+                                tooltipContent="Upload code folder/ZIP for dependency analysis"
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                            >
+                                <Code className="h-4 w-4" />
+                            </ButtonWithTooltip>
+                        )}
 
                         <ButtonWithTooltip
                             type="button"

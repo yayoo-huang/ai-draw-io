@@ -32,7 +32,8 @@
                 "noStaticElementInteractions": "off",
                 "useKeyWithClickEvents": "off",
                 "noLabelWithoutControl": "off",
-                "noNoninteractiveTabindex": "off"
+                "noNoninteractiveTabindex": "off",
+                "noSvgWithoutTitle": "off"
             },
             "correctness": {
                 "useExhaustiveDependencies": "off"
@@ -76,6 +77,15 @@
                 "enabled": false
             },
             "assist": {
+                "enabled": false
+            }
+        },
+        {
+            "includes": ["cli/dist/**"],
+            "formatter": {
+                "enabled": false
+            },
+            "linter": {
                 "enabled": false
             }
         }

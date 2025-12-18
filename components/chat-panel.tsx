@@ -18,8 +18,10 @@ import { FaGithub } from "react-icons/fa"
 import { Toaster, toast } from "sonner"
 import { ButtonWithTooltip } from "@/components/button-with-tooltip"
 import { ChatInput } from "@/components/chat-input"
+import { CodeUpload } from "@/components/code-upload"
 import { ResetWarningModal } from "@/components/reset-warning-modal"
 import { SettingsDialog } from "@/components/settings-dialog"
+import { Button } from "@/components/ui/button"
 import { useDiagram } from "@/contexts/diagram-context"
 import { getAIConfig } from "@/lib/ai-config"
 import { findCachedResponse } from "@/lib/cached-responses"
@@ -144,6 +146,8 @@ export default function ChatPanel({
     const [dailyTokenLimit, setDailyTokenLimit] = useState(0)
     const [tpmLimit, setTpmLimit] = useState(0)
     const [showNewChatDialog, setShowNewChatDialog] = useState(false)
+    const [showCodeUpload, setShowCodeUpload] = useState(false)
+    const [codeFiles, setCodeFiles] = useState<any[]>([])
 
     // Check config on mount
     useEffect(() => {
@@ -825,7 +829,12 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
         sendMessage(
             { parts },
             {
-                body: { xml, previousXml, sessionId },
+                body: {
+                    xml,
+                    previousXml,
+                    sessionId,
+                    codeFiles: codeFiles.length > 0 ? codeFiles : undefined,
+                },
                 headers: {
                     "x-access-code": config.accessCode,
                     ...(config.aiProvider && {
@@ -1135,10 +1144,114 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                 />
             </main>
 
+            {/* Code Upload Section */}
+            {showCodeUpload && (
+                <div className="px-4 py-3 border-t border-border/50 bg-muted/30">
+                    <CodeUpload
+                        onFilesReady={async (files) => {
+                            setCodeFiles(files)
+                            setShowCodeUpload(false)
+
+                            // If it's a local analysis result (language === 'analysis'), auto-send
+                            if (
+                                files.length > 0 &&
+                                files[0].language === "analysis"
+                            ) {
+                                const context = files[0].content // Analysis context
+                                setInput(context)
+
+                                // Auto trigger send
+                                setTimeout(async () => {
+                                    try {
+                                        let chartXml = await onFetchChart()
+                                        chartXml = formatXML(chartXml)
+                                        chartXMLRef.current = chartXml
+
+                                        const parts: any[] = [
+                                            { type: "text", text: context },
+                                        ]
+
+                                        const snapshotKeys = Array.from(
+                                            xmlSnapshotsRef.current.keys(),
+                                        ).sort((a, b) => b - a)
+                                        const previousXml =
+                                            snapshotKeys.length > 0
+                                                ? xmlSnapshotsRef.current.get(
+                                                      snapshotKeys[0],
+                                                  ) || ""
+                                                : ""
+
+                                        const messageIndex = messages.length
+                                        xmlSnapshotsRef.current.set(
+                                            messageIndex,
+                                            chartXml,
+                                        )
+                                        saveXmlSnapshots()
+
+                                        if (checkAllQuotaLimits()) {
+                                            sendChatMessage(
+                                                parts,
+                                                chartXml,
+                                                previousXml,
+                                                sessionId,
+                                            )
+                                            setInput("")
+                                            setCodeFiles([])
+                                        }
+                                    } catch (error) {
+                                        console.error(
+                                            "Error auto-sending analysis:",
+                                            error,
+                                        )
+                                        toast.error(
+                                            "Auto-send failed, please click send manually",
+                                        )
+                                    }
+                                }, 100)
+                            }
+                        }}
+                        maxSize={50}
+                        maxFiles={1000}
+                    />
+                </div>
+            )}
+
             {/* Input */}
             <footer
                 className={`${isMobile ? "p-2" : "p-4"} border-t border-border/50 bg-card/50`}
             >
+                {!showCodeUpload && codeFiles.length > 0 && (
+                    <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <svg
+                                    className="w-5 h-5 text-blue-500"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                    />
+                                </svg>
+                                <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                                    Code uploaded ({codeFiles.length} files)
+                                </span>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setCodeFiles([])}
+                                className="h-7 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900"
+                            >
+                                Clear
+                            </Button>
+                        </div>
+                    </div>
+                )}
                 <ChatInput
                     input={input}
                     status={status}
@@ -1152,6 +1265,7 @@ Please retry with an adjusted search pattern or use display_diagram if retries a
                     onToggleHistory={setShowHistory}
                     sessionId={sessionId}
                     error={error}
+                    onCodeUploadClick={() => setShowCodeUpload(!showCodeUpload)}
                 />
             </footer>
 

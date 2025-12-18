@@ -11,6 +11,12 @@ import { z } from "zod"
 import { getAIModel, supportsPromptCaching } from "@/lib/ai-providers"
 import { findCachedResponse } from "@/lib/cached-responses"
 import {
+    analyzeServiceDependencies,
+    type CodeFile,
+    generateDependencyContext,
+} from "@/lib/dependency-detector"
+import { DEPENDENCY_DIAGRAM_PROMPT } from "@/lib/dependency-diagram-prompt"
+import {
     getTelemetryConfig,
     setTraceInput,
     setTraceOutput,
@@ -173,7 +179,8 @@ async function handleChatRequest(req: Request): Promise<Response> {
         }
     }
 
-    const { messages, xml, previousXml, sessionId } = await req.json()
+    const { messages, xml, previousXml, sessionId, codeFiles } =
+        await req.json()
 
     // Get user IP for Langfuse tracking
     const forwardedFor = req.headers.get("x-forwarded-for")
@@ -240,7 +247,49 @@ async function handleChatRequest(req: Request): Promise<Response> {
     )
 
     // Get the appropriate system prompt based on model (extended for Opus/Haiku 4.5)
-    const systemMessage = getSystemPrompt(modelId)
+    let systemMessage = getSystemPrompt(modelId)
+
+    // === CODE DEPENDENCY ANALYSIS START ===
+    let dependencyContext = ""
+    if (codeFiles && Array.isArray(codeFiles) && codeFiles.length > 0) {
+        console.log(
+            `[Dependency Analysis] Analyzing ${codeFiles.length} code files...`,
+        )
+
+        try {
+            // Run dependency analysis
+            const analysis = analyzeServiceDependencies(codeFiles as CodeFile[])
+
+            console.log(
+                `[Dependency Analysis] Service: ${analysis.serviceName}`,
+            )
+            console.log(
+                `[Dependency Analysis] Found ${analysis.dependencies.length} dependencies`,
+            )
+
+            // Generate context for AI
+            dependencyContext = generateDependencyContext(analysis)
+
+            // Append dependency prompt and context to system message
+            systemMessage =
+                systemMessage +
+                "\n\n" +
+                DEPENDENCY_DIAGRAM_PROMPT +
+                "\n\n" +
+                dependencyContext
+
+            console.log(
+                "[Dependency Analysis] Context generated and added to system prompt",
+            )
+        } catch (error) {
+            console.error(
+                "[Dependency Analysis] Error analyzing dependencies:",
+                error,
+            )
+            // Continue without dependency analysis if it fails
+        }
+    }
+    // === CODE DEPENDENCY ANALYSIS END ===
 
     const lastMessage = messages[messages.length - 1]
 

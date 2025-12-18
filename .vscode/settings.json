@@ -19,5 +19,8 @@
     },
     "[json]": {
         "editor.defaultFormatter": "biomejs.biome"
+    },
+    "files.watcherExclude": {
+        "**/target": true
     }
 }
